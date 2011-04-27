@@ -137,8 +137,19 @@ end
 
 module Posterous
   module Resources
-     
+    
+    module Helpers
+    
+      def normalized_identifier(name)
+        name.downcase.\
+              gsub(/[^a-z\-_]/, '-').\
+              gsub(/^-+|-+|-+$/, '-')
+      end
+      
+    end
+    
     class Post
+      include Helpers
       
       TAG_XPATH = {
                      'audio_files' => '',
@@ -176,9 +187,7 @@ module Posterous
       end
       
       def identifier
-        @identifier ||= @raw['title'].downcase.
-                          gsub(/[^a-z\-_]/, '-').
-                          gsub(/^-+|-+|-+$/, '-').cleaned_identifier
+        @identifier ||= normalized_identifier(@raw['title'])
       end
       
       def content
@@ -233,24 +242,9 @@ module Posterous
       def videos
         media['videos']
       end
-      
-      # update media tags in content based on passed template
-      # and TAG_XPATH finders
-      # for each media[type]
-      #
-      def update(type, template = nil)
-      #TODO
-      end
-      
+            
       private 
-      
-      def normalized_identifier(name, prefix = nil)
-        "#{prefix ? prefix.cleaned_identifier : nil}
-         #{name.downcase.\
-              gsub(/[^a-z\-_]/, '-').\
-              gsub(/^-+|-+|-+$/, '-').cleaned_identifier}"
-      end
-                                          
+                                                
       def nontag_attribute_pairs
         (attributes_map.keys - ['tags']).map do |key|
           [ attributes_map[key], @raw[key.to_s] ]
@@ -265,7 +259,8 @@ module Posterous
     
     
     class Image
-    
+      include Helpers
+      
       attr_reader :raw, :scale
       attr_accessor :identifier
       
@@ -304,7 +299,7 @@ module Posterous
           File.extension(URI.parse(@raw['url']).path.split("/").last.gsub(".#{scale}",''))
       end
       
-      # as tempfile
+      # as tempfile - maybe there's a better way?
       def content
         return @content if @content
         f = Tempfile.new(basename)
@@ -328,15 +323,6 @@ module Posterous
           end
       end
                 
-      private
-      
-      def normalized_identifier(name, prefix = nil)
-        "#{prefix ? prefix.cleaned_identifier : nil}
-         #{name.downcase.\
-              gsub(/[^a-z\-_]/, '-').\
-              gsub(/^-+|-+|-+$/, '-').cleaned_identifier}"
-      end
-      
     end
     
     

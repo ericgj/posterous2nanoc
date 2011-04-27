@@ -153,6 +153,8 @@ module Nanoc3
           end
         end
         
+        # NOTE - I don't want to do it like this
+        #       model classes shouldn't need to define #update to change their content
         def update_media_tags_in(item)
           item.update :audio_files, audio_file_template
           item.update :images, image_template
