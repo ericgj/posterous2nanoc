@@ -155,10 +155,16 @@ module Nanoc3
         
         # NOTE - I don't want to do it like this
         #       model classes shouldn't need to define #update to change their content
+        #       what they do need to provide is the xpath finder(s) 
         def update_media_tags_in(item)
-          item.update :audio_files, audio_file_template
-          item.update :images, image_template
-          item.update :videos, video_template
+          dom = Nokogiri::HTML.parse(item.content)
+          [:audio_files, :images, :video].each do |key|
+            item.send(key) each do |f|
+              dom.xpath(f.xpath).each do |node|
+                # and then what? yield node?
+              end
+            end
+          end
         end
         
         # NOTE this is not done now, it assumes site exists

@@ -150,13 +150,7 @@ module Posterous
     
     class Post
       include Helpers
-      
-      TAG_XPATH = {
-                     'audio_files' => '',
-                     'videos' => '',
-                     'images' => ''
-                   }
-      
+       
       attr_reader :raw
       attr_accessor :identifier
       
@@ -191,7 +185,7 @@ module Posterous
       end
       
       def content
-        @content ||= @raw['body']
+        @content ||= @raw['body_full']
       end
       
       # note this is not cached, as media_attributes may change
@@ -297,6 +291,10 @@ module Posterous
       def extension
         @extension ||= \
           File.extension(URI.parse(@raw['url']).path.split("/").last.gsub(".#{scale}",''))
+      end
+      
+      def xpath
+        "//a[@href='#{@raw['url']}'"
       end
       
       # as tempfile - maybe there's a better way?
