@@ -132,7 +132,7 @@ end
 #   Posterous::Client.resources :post => Posterous::Resources::Post
 #
 
-#  require 'nokogiri'
+require 'nokogiri'
 #  require 'erb'
 
 module Posterous
@@ -148,8 +148,29 @@ module Posterous
       
     end
     
+    module Updatable
+    
+      attr_accessor :updated_content
+      def updated_content; @updated_content ||= self.content; end
+      
+      def update(&blk)
+        @updated_content = \
+          yield(Nokogiri::XML.fragment(updated_content)).serialize
+      end
+      
+      def update_each(xpath, &blk)
+        dom = Nokogiri::XML.fragment(updated_content)
+        dom.xpath(xpath).each do |node|
+          yield node
+        end
+        @updated_content = dom.serialize
+      end
+      
+    end
+    
     class Post
       include Helpers
+      include Updatable
        
       attr_reader :raw
       attr_accessor :identifier
@@ -236,7 +257,17 @@ module Posterous
       def videos
         media['videos']
       end
-            
+      
+      %w( audio_files images videos).each do |type|
+        module_eval(%Q{
+          def update_#{type}(&blk)
+            self.#{type}.each do |m|
+              self.update_each(m.xpath, &blk)
+            end
+          end
+        })
+      end
+      
       private 
                                                 
       def nontag_attribute_pairs
