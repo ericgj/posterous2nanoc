@@ -49,7 +49,7 @@ module Posterous
     def user; @user ||= 'me'; end
 
     def posts(options={})
-      raw = send_posterous_request :get, "/users/#{user}/sites/#{site}/posts", options
+      raw = send_posterous_request :get, "/users/#{user}/sites/#{site}/posts", {}, options
       resource_for(:post) ? raw.map {|it| as_resource(it, :post)} : raw
     end 
 
@@ -155,15 +155,17 @@ module Posterous
       
       def update(&blk)
         @updated_content = \
-          yield(Nokogiri::XML.fragment(updated_content)).serialize
+          Nokogiri::HTML.fragment(
+            yield(Nokogiri::HTML.parse(updated_content)).serialize
+          ).serialize
       end
       
       def update_each(xpath, &blk)
-        dom = Nokogiri::XML.fragment(updated_content)
+        dom = Nokogiri::HTML.parse(updated_content)
         dom.xpath(xpath).each do |node|
           yield node
         end
-        @updated_content = dom.serialize
+        @updated_content = Nokogiri::HTML.fragment(dom.serialize).serialize
       end
       
     end
@@ -325,7 +327,7 @@ module Posterous
       end
       
       def xpath
-        "//a[@href='#{@raw['url']}'"
+        "//img[@src='#{@raw['url']}']"
       end
       
       # as tempfile - maybe there's a better way?

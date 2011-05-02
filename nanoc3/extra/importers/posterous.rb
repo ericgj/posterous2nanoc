@@ -82,7 +82,7 @@ module Nanoc3
         
         def image_template
           @image_template ||= \
-            "[[<%= image.identifier %>]]"
+            "[[<%= object.identifier %>]]"
         end
         
         def initialize(options = {})
@@ -145,7 +145,7 @@ module Nanoc3
         end
         
         def extract_media_from(item)
-          [:audio_files, :images, :video].each do |key|
+          [:audio_files, :images, :videos].each do |key|
             item.send(key).each do |raw| 
               id = create_binary_item_from(raw, identifier_map[key], raw.content)
               raw.identifier = id
@@ -154,15 +154,19 @@ module Nanoc3
         end
         
         def update_media_tags_in(item)
-          dom = Nokogiri::HTML.parse(item.content)
-          [:audio_files, :images, :video].each do |key|
-            item.send(key) each do |f|
-              dom.xpath(f.xpath).each do |node|
-                # and then what? yield node?
-                
-              end
-            end
+        
+          klass = Class.new {
+            def initialize(obj); @object = obj; end
+            def get_binding; binding(); end
+          }
+
+          item.update_images do |tag|
+            div = tag.parent
+            tag.remove
+            div.add ERB.new(image_template).result(klass.new(tag).get_binding)
           end
+          
+          # TODO for audio_files, videos
         end
         
         # NOTE this is not done now, it assumes site exists
