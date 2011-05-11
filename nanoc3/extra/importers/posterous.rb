@@ -1,11 +1,12 @@
 require 'nanoc3'
 require 'fileutils'
-require 'open-uri'
-require 'uri'
+require 'erb'
 
-# usage
+# Usage
+#
+#   # initialize importer with Nanoc filesystem info
 #   importer = Nanoc3::Extra::Importers::Posterous.new \
-#                :path => '/path/to/target', 
+#                :path => '/path/to/target/site', 
 #                :data_source => :filesystem_unified
 #   
 #   # import whole site including posts, pages, theme
@@ -16,8 +17,15 @@ require 'uri'
 #     posts :tag => 'starred'
 #     pages
 #   end
-  
-  
+#
+#   # set mapping for Posterous item types => Nanoc identifier prefixes
+#   importer.identifier_map[:posts] => '/blog/'
+#
+#   # set template for converting posterous image tags
+#   # NOTE this is a work in progress, may be a simpler way
+#   importer.image_template = "<img src='<%%= items.find {|it| it.identifier == '<%= media.identifier %>'}.path %%>' />"
+#   importer.image_template = "{{ <%= media.identifier %> }}"   # moustache-esque template
+#  
 module Nanoc3
   module Extra
     module Importers
@@ -41,8 +49,9 @@ module Nanoc3
           @site
         end
         
+        # TODO raise error (or output to stderr ?) unless self.site
         def create_item(content, attrib, id, params = {})
-         
+          # unless self.site raise 
           self.site.data_sources[0].create_item(
             content,
             attrib,
@@ -68,6 +77,8 @@ module Nanoc3
                       :video_template,
                       :audio_file_template
         
+        attr_accessor :output
+        
         def identifier_map
           @identifier_map ||=  \
             { 
@@ -82,55 +93,75 @@ module Nanoc3
         
         def image_template
           @image_template ||= \
-            "[[<%= object.identifier %>]]"
+            "[[<%= media.identifier %>]]"
         end
+        
+        def output; @output ||= $stderr; end
         
         def initialize(options = {})
           @path = options[:path] || '.'
           @data_source = options[:data_source]
-        end
+          @counter = Hash.new(0)
+       end
         
         def import(options = {}, &blk)
+          @counter.clear
           if block_given?
             init_client(options)
-            #create_site_unless_exists
+            output.puts "Importing site..."
             instance_eval(&blk)
+            output.puts "Done."
+            @counter.each do |k, v|
+              output.puts "  + #{v} #{k}"
+            end
           else
             import(options) { posts; pages; theme }
           end
         end
         
         def posts(options = {})
-          client.posts(options).each do |post| 
+          #TODO raise unless client
+          ps = client.posts(options)
+          output.puts "  #{ps.size} posts found..."
+          ps.each do |post| 
             create_post_from post
           end
         end
         
         def pages(options = {})
+          #TODO raise unless client
           client.pages(options).each do |page| 
             create_page_from page
           end
         end
         
         def theme(options = {})
+          #TODO raise unless client
           create_theme_from client.theme(options)
         end
         
         private
         
         def init_client(options = {})
-          ::Posterous::Client.resources :post => Post
-                                              
+          
+          ::Posterous::Client.resources :post => ::Posterous::Resources::Post
+          #TODO the same for Page, Theme
+          
           @client = ::Posterous::Client.new(options[:username], options[:password])
           @client.site = options[:site] if options[:site]
           @client.user = options[:user] if options[:user]
+          @client.debug_output(options[:debug]) if options[:debug]
           @client
         end
         
         def create_post_from(post)
+          output.puts "    #{post.identifier}...extracting media"
           extract_media_from(post)
+          output.puts "    #{post.identifier}...updating media tags"
           update_media_tags_in(post)
+          output.puts "    #{post.identifier}...creating item in #{identifier_map[:posts]}"
           create_item_from(post, identifier_map[:posts])
+          @counter[:posts] += 1
         end
         
         def create_page_from(page)
@@ -146,8 +177,11 @@ module Nanoc3
         
         def extract_media_from(item)
           [:audio_files, :images, :videos].each do |key|
+            output.puts "      #{key}...extracting"
             item.send(key).each do |raw| 
-              id = create_binary_item_from(raw, identifier_map[key], raw.content)
+              id = create_binary_item_from(raw, identifier_map[key])
+              @counter[key] += 1
+              output.puts "        #{raw.identifier} => #{id}"
               raw.identifier = id
             end
           end
@@ -157,13 +191,17 @@ module Nanoc3
         
           klass = Class.new {
             def initialize(obj); @object = obj; end
+            def media; @object; end
             def get_binding; binding(); end
           }
 
-          item.update_images do |tag|
+          output.puts "      images...updating tags"
+          item.update_images do |tag, img|
             div = tag.parent
             tag.remove
-            div.add ERB.new(image_template).result(klass.new(tag).get_binding)
+            t = ERB.new(image_template).result(klass.new(img).get_binding)
+            div.add_child t
+            output.puts "        #{img.identifier} => #{t}"
           end
           
           # TODO for audio_files, videos
@@ -175,17 +213,21 @@ module Nanoc3
           rescue
         end
         
-        # NOTE both of these assume a filesystem_unified data source
-        
+        # NOTE assumes a filesystem_unified data source
         def create_item_from(item, prefix = nil)
-          id = "#{prefix ? prefix.cleaned_identifier : nil}#{item.identifier.cleaned_identifier}"
-          create_item item.content, item.attributes, id, :extension => 'html'
+          id = "#{prefix}#{item.identifier}".cleaned_identifier
+          create_item item.updated_content, item.attributes, id, :extension => '.html'
           id
         end
         
-        def create_binary_item_from(item, prefix = nil, filename_or_io = nil)          
-          id = "#{prefix ? prefix.cleaned_identifier : nil}#{item.identifier.cleaned_identifier}"
-          create_item '', item.attributes, id, :extension => 'yaml'
+        # NOTE assumes a filesystem_unified data source        
+        # This is not ideal, as it ends up reading the content twice, once over http and once locally
+        # But Nanoc Filesystem doesn't give us much choice, you have to pass in the content to create_object, not a filename. 
+        def create_binary_item_from(item, prefix = nil)          
+          id = "#{prefix}#{item.identifier}".cleaned_identifier
+          create_item '', item.attributes, id, :extension => '.yaml'
+          
+          filename_or_io = item.content
           
           if filename_or_io.respond_to?(:read)
             create_item filename_or_io.read, {}, id, :extension => item.extension

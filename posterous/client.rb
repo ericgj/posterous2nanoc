@@ -29,7 +29,7 @@ module Posterous
     include HTTParty	
 
     base_uri 'http://posterous.com/api/2'
-    debug_output $stderr
+    #debug_output $stderr
     parser JsonParser
 
     class << self
@@ -133,6 +133,10 @@ end
 #
 
 require 'nokogiri'
+require 'tempfile'
+require 'open-uri'
+require 'uri'
+require 'progressbar'
 #  require 'erb'
 
 module Posterous
@@ -164,6 +168,14 @@ module Posterous
         dom = Nokogiri::HTML.parse(updated_content)
         dom.xpath(xpath).each do |node|
           yield node
+        end
+        @updated_content = Nokogiri::HTML.fragment(dom.serialize).serialize
+      end
+      
+      def update_each_embed(item, &blk)
+        dom = Nokogiri::HTML.parse(updated_content)
+        dom.xpath(item.xpath).each do |node|
+          yield node, item
         end
         @updated_content = Nokogiri::HTML.fragment(dom.serialize).serialize
       end
@@ -211,13 +223,16 @@ module Posterous
         @content ||= @raw['body_full']
       end
       
+      def [](attr)
+        self.attributes[attr]
+      end
+      
       # note this is not cached, as media_attributes may change
       #
       def attributes
-        Hash[
-          nontag_attribute_pairs +
-          tag_attribute_pairs
-        ].merge(media_attributes)
+        Hash[nontag_attribute_pairs].
+             merge('tags' => tags).
+             merge(media_attributes)
       end
 
       def media_attributes
@@ -264,10 +279,14 @@ module Posterous
         module_eval(%Q{
           def update_#{type}(&blk)
             self.#{type}.each do |m|
-              self.update_each(m.xpath, &blk)
+              self.update_each_embed(m, &blk)
             end
           end
         })
+      end
+      
+      def tags
+        @tags ||= @raw['tags'].map {|t| t['name']} 
       end
       
       private 
@@ -278,6 +297,7 @@ module Posterous
         end
       end
       
+      # no longer used
       def tag_attribute_pairs
         [ attributes_map['tags'], @raw['tags'].map {|t| t['name']} ]
       end
@@ -323,27 +343,42 @@ module Posterous
       
       def extension
         @extension ||= \
-          File.extension(URI.parse(@raw['url']).path.split("/").last.gsub(".#{scale}",''))
+          File.extname(URI.parse(@raw['url']).path.split("/").last.gsub(".#{scale}",''))
       end
       
       def xpath
-        "//img[@src='#{@raw['url']}']"
+        ".//img[@src='#{@raw['url']}']"
       end
       
-      # as tempfile - maybe there's a better way?
-      def content
+      # via open-uri with progressbar
+      def content(to_file = nil)
         return @content if @content
-        f = Tempfile.new(basename)
+        to_file = Tempfile.new(basename)
         #f.unlink
-        open(@raw['url']) do |data|
-          f.write data.read
+
+        pbar = nil
+        open(@raw['url'],
+          :content_length_proc => lambda {|t|
+            if t && 0 < t
+              pbar = ProgressBar.new(identifier, t)
+              pbar.file_transfer_mode
+            end
+          },
+          :progress_proc => lambda {|s|
+            pbar.set s if pbar
+          }) do |data|
+            to_file.write data.read
         end
-        f.rewind
-        @content ||= f
+        to_file.rewind if to_file.respond_to?(:rewind)
+        @content ||= to_file
       end
 
       def path
         content.path
+      end
+      
+      def [](attr)
+        self.attributes[attr]
       end
       
       def attributes
