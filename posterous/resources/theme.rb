@@ -1,6 +1,7 @@
 # This is a basic Theme model for further parsing of Posterous themes
+# (Mainly used for extracting the CSS from the theme)
 # Use it by calling
-#   Posterous::Client.resources :theme => Posterous::Resources::Theme
+#   Posterous::Client.resource :theme, Posterous::Resources::Theme
 
 Dir["#{File.dirname(__FILE__)}/helpers/*.rb"].each do |f|
   require f
@@ -19,7 +20,7 @@ module Posterous
       
       def content; @content ||= @raw['raw_theme']; end
       
-      #TODO resolve 'meta' values in css
+      #TODO resolve 'meta' key-value pairs in css
       def css
         return @css if @css
         nodes = Nokogiri::HTML.parse(content).xpath('/html/head/style')

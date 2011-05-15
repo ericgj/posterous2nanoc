@@ -1,6 +1,6 @@
 # This is a basic Page model for further parsing of Posterous pages
 # Use it by calling
-#   Posterous::Client.resources :page => Posterous::Resources::Page
+#   Posterous::Client.resource :page, Posterous::Resources::Page
 
 Dir["#{File.dirname(__FILE__)}/helpers/*.rb"].each do |f|
   require f
@@ -25,6 +25,10 @@ module Posterous
             'id' => 'posterous_post_id',
             'slug' => 'posterous_slug'
           }
+      end
+
+      def attributes_proc
+        @attributes_proc ||= {}
       end
       
       def initialize(raw)
@@ -64,7 +68,11 @@ module Posterous
                                                 
       def attribute_pairs
         (attributes_map.keys).map do |key|
-          [ attributes_map[key], @raw[key.to_s] ]
+          if attributes_proc.has_key?(key)
+            [ attributes_map[key], attributes_proc[key].call(@raw[key.to_s]) ]
+          else
+            [ attributes_map[key], @raw[key.to_s] ]
+          end
         end
       end
       

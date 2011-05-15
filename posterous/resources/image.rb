@@ -26,7 +26,11 @@ module Posterous
             'post_id' => 'posterous_post_id'
           }
       end
-      
+
+      def attributes_proc
+        @attributes_proc ||= {}
+      end
+            
       def initialize(scale, raw)
         @scale = scale
         @raw = raw
@@ -69,7 +73,11 @@ module Posterous
       def attributes
         @attributes ||= \
           attributes_map.keys.inject({}) do |memo, key|
-            memo[attributes_map[key]] = @raw[key]
+            if attributes_proc.has_key?(key)
+              memo[attributes_map[key]] = attributes_proc[key].call(@raw[key.to_s])
+            else
+              memo[attributes_map[key]] = @raw[key.to_s]
+            end
             memo
           end
       end

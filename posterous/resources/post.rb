@@ -1,7 +1,12 @@
 # This is a basic Post model for further parsing of Posterous posts
 # Use it by calling
-#   Posterous::Client.resources :post => Posterous::Resources::Post
-
+#   Posterous::Client.resource :post, Posterous::Resources::Post
+#
+# Note that display_date is parsed as Time. You can define other custom 
+# transformations on attributes like:
+#
+#   post.attributes_proc[:title] = lambda {|raw| raw.upcase}
+#
 Dir["#{File.dirname(__FILE__)}/helpers/*.rb"].each do |f|
   require f
 end
@@ -27,6 +32,13 @@ module Posterous
             'id' => 'posterous_post_id',
             'is_private' => 'is_private',
             'slug' => 'posterous_slug'
+          }
+      end
+      
+      def attributes_proc
+        @attributes_proc ||= \
+          {
+            'display_date' => lambda {|raw| Time.parse(raw)}
           }
       end
       
@@ -72,15 +84,14 @@ module Posterous
                                                 
       def nontag_attribute_pairs
         (attributes_map.keys - ['tags']).map do |key|
-          [ attributes_map[key], @raw[key.to_s] ]
+          if attributes_proc.has_key?(key)
+            [ attributes_map[key], attributes_proc[key].call(@raw[key.to_s]) ]
+          else
+            [ attributes_map[key], @raw[key.to_s] ]
+          end
         end
       end
       
-      # no longer used
-      def tag_attribute_pairs
-        [ attributes_map['tags'], @raw['tags'].map {|t| t['name']} ]
-      end
-                
     end
   
   end

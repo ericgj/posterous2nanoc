@@ -1,6 +1,7 @@
 require 'nanoc3'
 require 'fileutils'
 require 'erb'
+require 'posterous/client'
 
 # Usage
 #
@@ -27,10 +28,11 @@ require 'erb'
 #
 #   # set template for converting posterous image tags
 #   # NOTE this is a work in progress, may be a simpler way
-
+#
 #     importer.images_template = "<img src='<%%= items.find {|it| it.identifier == '<%= media.identifier %>'}.path %%>' />"
 #
-#   # or this is a way I simplify image embedding in nanoc -- 
+#   # or this is a way I simplify image embedding in nanoc -- using a custom filter
+#
 #     importer.images_template = "[[<%= media.identifier %>]]"   
 #  
 module Nanoc3
@@ -107,13 +109,12 @@ module Nanoc3
           @counter = Hash.new(0)
        end
         
-        #TODO check arity and `yield self` if param
         def import(options = {}, &blk)
           @counter.clear
           if block_given?
             init_client(options)
             output.puts "Importing site..."
-            instance_eval(&blk)
+            blk.arity == 1 ? yield(self) : instance_eval(&blk)
             output.puts "Done."
             @counter.each do |k, v|
               output.puts "  + #{v} #{k}"
@@ -150,11 +151,10 @@ module Nanoc3
         
         def init_client(options = {})
           
-          ::Posterous::Client.resources :post => ::Posterous::Resources::Post
-          ::Posterous::Client.resources :page => ::Posterous::Resources::Page
-          ::Posterous::Client.resources :theme => ::Posterous::Resources::Theme
-          #TODO the same for Theme
-          
+          ::Posterous::Client.resources :post => ::Posterous::Resources::Post,
+                                        :page => ::Posterous::Resources::Page,
+                                        :theme => ::Posterous::Resources::Theme
+                                        
           @client = ::Posterous::Client.new(options[:username], options[:password])
           @client.site = options[:site] if options[:site]
           @client.user = options[:user] if options[:user]
