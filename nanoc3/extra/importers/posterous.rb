@@ -74,9 +74,9 @@ module Nanoc3
 end
 
 module Nanoc3
-	module Extra
-		module Importers
-			class Posterous < Base
+  module Extra
+    module Importers
+      class Posterous < Base
         
         attr_reader :client
         attr_reader :identifier_map

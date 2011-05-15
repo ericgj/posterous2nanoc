@@ -7,7 +7,7 @@ end
 # using native json parser instead of Crack
 class JsonParser < HTTParty::Parser
   def json
-		::JSON.parse(body)
+    ::JSON.parse(body)
   end
 end
 
@@ -29,7 +29,7 @@ module Posterous
   end
 
   class Client
-    include HTTParty	
+    include HTTParty  
 
     base_uri 'http://posterous.com/api/2'
     #debug_output $stderr
