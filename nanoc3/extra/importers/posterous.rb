@@ -5,26 +5,33 @@ require 'erb'
 # Usage
 #
 #   # initialize importer with Nanoc filesystem info
-#   importer = Nanoc3::Extra::Importers::Posterous.new \
-#                :path => '/path/to/target/site', 
-#                :data_source => :filesystem_unified
+#
+#      importer = Nanoc3::Extra::Importers::Posterous.new \
+#                   :path => '/path/to/target/site', 
+#                   :data_source => :filesystem_unified
 #   
 #   # import whole site including posts, pages, theme
-#   importer.import :username => 'user', :password => 'pass', :site => 'mysite'
+#
+#     importer.import :username => 'user', :password => 'pass', :site => 'mysite'
 #   
 #   # import selected items (options will be passed as query params)
-#   importer.import(:username => 'user', :password => 'pass', :site => 'mysite') do
-#     posts :tag => 'starred'
-#     pages
-#   end
+#
+#     importer.import(:username => 'user', :password => 'pass', :site => 'mysite') do
+#       posts :tag => 'starred'
+#       pages
+#     end
 #
 #   # set mapping for Posterous item types => Nanoc identifier prefixes
-#   importer.identifier_map[:posts] => '/blog/'
+#
+#     importer.identifier_map[:posts] => '/blog/'
 #
 #   # set template for converting posterous image tags
 #   # NOTE this is a work in progress, may be a simpler way
-#   importer.image_template = "<img src='<%%= items.find {|it| it.identifier == '<%= media.identifier %>'}.path %%>' />"
-#   importer.image_template = "{{ <%= media.identifier %> }}"   # moustache-esque template
+
+#     importer.images_template = "<img src='<%%= items.find {|it| it.identifier == '<%= media.identifier %>'}.path %%>' />"
+#
+#   # or this is a way I simplify image embedding in nanoc -- 
+#     importer.images_template = "[[<%= media.identifier %>]]"   
 #  
 module Nanoc3
   module Extra
@@ -40,7 +47,6 @@ module Nanoc3
         #
         # @return [Nanoc3::Site] The site in the specified or current directory
         def site
-          # Load site if possible
           FileUtils.cd(self.path) do |dir|
             if File.file?('config.yaml') && (!self.instance_variable_defined?(:@site) || @site.nil?)
               @site = Nanoc3::Site.new('.')
@@ -73,7 +79,7 @@ module Nanoc3
         attr_reader :client
         attr_reader :identifier_map
         
-        attr_accessor :image_template,
+        attr_accessor :images_template,
                       :video_template,
                       :audio_file_template
         
@@ -91,10 +97,6 @@ module Nanoc3
             }
         end
         
-        def image_template
-          @image_template ||= \
-            "[[<%= media.identifier %>]]"
-        end
         
         def output; @output ||= $stderr; end
         
@@ -104,6 +106,7 @@ module Nanoc3
           @counter = Hash.new(0)
        end
         
+        #TODO check arity and `yield self` if param
         def import(options = {}, &blk)
           @counter.clear
           if block_given?
@@ -145,7 +148,8 @@ module Nanoc3
         def init_client(options = {})
           
           ::Posterous::Client.resources :post => ::Posterous::Resources::Post
-          #TODO the same for Page, Theme
+          ::Posterous::Client.resources :page => ::Posterous::Resources::Page
+          #TODO the same for Theme
           
           @client = ::Posterous::Client.new(options[:username], options[:password])
           @client.site = options[:site] if options[:site]
@@ -165,9 +169,13 @@ module Nanoc3
         end
         
         def create_page_from(page)
+          output.puts "    #{page.identifier}...extracting media"
           extract_media_from(page)
+          output.puts "    #{page.identifier}...updating media tags"
           update_media_tags_in(page)
+          output.puts "    #{page.identifier}...creating item in #{identifier_map[:pages]}"
           create_item_from(page, identifier_map[:pages])
+          @counter[:pages] += 1
         end
         
         #TODO extract top image from this?
@@ -187,6 +195,9 @@ module Nanoc3
           end
         end
         
+        # TODO split into separate methods per type?
+        # or add customizable block methods like
+        #      update_images(&blk) which defaults to the below
         def update_media_tags_in(item)
         
           klass = Class.new {
@@ -195,13 +206,15 @@ module Nanoc3
             def get_binding; binding(); end
           }
 
-          output.puts "      images...updating tags"
-          item.update_images do |tag, img|
-            div = tag.parent
-            tag.remove
-            t = ERB.new(image_template).result(klass.new(img).get_binding)
-            div.add_child t
-            output.puts "        #{img.identifier} => #{t}"
+          if images_template
+            output.puts "      images...updating tags"
+            item.update_images do |tag, img|
+              div = tag.parent
+              tag.remove
+              t = ERB.new(images_template).result(klass.new(img).get_binding)
+              div.add_child t
+              output.puts "        #{img.identifier} => #{t}"
+            end
           end
           
           # TODO for audio_files, videos

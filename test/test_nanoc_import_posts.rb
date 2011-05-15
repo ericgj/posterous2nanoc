@@ -33,7 +33,7 @@ describe "Nanoc3::Extra::Importers::Posterous import posts" do
   end
 
   def expect_create_binary_item_with(attrib, id, params)
-    @subject.site.data_sources[0].expects(:create_item).with(anything(),attrib, id, {:extension => 'yaml'})
+    @subject.site.data_sources[0].expects(:create_item).with(anything(),attrib, id, {:extension => '.yaml'})
     @subject.site.data_sources[0].expects(:create_item).with(anything(), {}, id, params)
   end
   
@@ -56,11 +56,11 @@ describe "Nanoc3::Extra::Importers::Posterous import posts" do
                                 'images' => []
                               },
                               '/posts/dangerous-virus-lol-/',
-                              :extension => 'html'
+                              :extension => '.html'
     end
     
     it 'should match expected content, attrib, id, and params' do
-      @subject.import { posts }
+      @subject.import { images_template = "[[<%= media.identifier %>]]"; posts }
     end
     
   end
@@ -81,7 +81,7 @@ describe "Nanoc3::Extra::Importers::Posterous import posts" do
                                       'posterous_post_id' => 10454692
                                      },
                                      '/images/afghanistan_bird_of_hope-full/',
-                                     :extension => 'jpg'
+                                     :extension => '.jpg'
                                     )
       
       expect_create_item_with expected_content('one-image'),
@@ -97,10 +97,11 @@ describe "Nanoc3::Extra::Importers::Posterous import posts" do
                                 'images' => ['/images/afghanistan_bird_of_hope-full/']
                               },
                               '/posts/rare-bird-s-breeding-ground-found-in-afghanistan/',
-                              :extension => 'html'
+                              :extension => '.html'
     end
     
     it 'should match expected content, attrib, id, and params; and load image' do
+      @subject.images_template = "[[<%= media.identifier %>]]"
       @subject.import { posts }
     end
   
