@@ -93,7 +93,8 @@ module Nanoc3
               :themes => '/themes/',
               :audio_files => '/audio/',
               :videos => '/video/',
-              :images => '/images/'
+              :images => '/images/',
+              :stylesheets => '/styles/posterous/'
             }
         end
         
@@ -133,14 +134,16 @@ module Nanoc3
         
         def pages(options = {})
           #TODO raise unless client
-          client.pages(options).each do |page| 
+          ps = client.pages(options)
+          output.puts "  #{ps.size} pages found..."
+          ps.each do |page| 
             create_page_from page
           end
         end
         
         def theme(options = {})
           #TODO raise unless client
-          create_theme_from client.theme(options)
+          create_stylesheet_from client.theme(options)
         end
         
         private
@@ -149,6 +152,7 @@ module Nanoc3
           
           ::Posterous::Client.resources :post => ::Posterous::Resources::Post
           ::Posterous::Client.resources :page => ::Posterous::Resources::Page
+          ::Posterous::Client.resources :theme => ::Posterous::Resources::Theme
           #TODO the same for Theme
           
           @client = ::Posterous::Client.new(options[:username], options[:password])
@@ -178,9 +182,10 @@ module Nanoc3
           @counter[:pages] += 1
         end
         
-        #TODO extract top image from this?
-        def create_theme_from(theme)
-          create_item_from(theme, identifier_map[:themes])
+        def create_stylesheet_from(theme)
+          output.puts "    theme...creating stylesheet in #{identifier_map[:stylesheets]}"
+          create_item theme.css, {}, identifier_map[:stylesheets].cleaned_identifier, :extension => '.css'
+          @counter[:stylesheets] += 1
         end
         
         def extract_media_from(item)
