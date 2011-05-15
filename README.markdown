@@ -16,3 +16,4 @@ Gem Dependencies (bundler coming soon..):
 - JSON
 - Nokogiri
 - progressbar
+- MiniTest + Mocha (for tests)
